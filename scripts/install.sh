@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Instalacja wymaganych pakietów systemowych
+if command -v apt-get &> /dev/null; then
+    echo "Instalacja wymaganych pakietów systemowych..."
+    sudo apt-get update
+    sudo apt-get install -y \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        python3-ensurepip \
+        libgl1-mesa-glx \
+        libglib2.0-0
+fi
+
 echo "Tworzenie środowiska wirtualnego..."
 
 # Sprawdzanie czy venv jest zainstalowany
@@ -19,6 +33,7 @@ if ! command -v python3 -m venv &> /dev/null; then
     fi
 fi
 
+cd ..
 # Tworzenie środowiska wirtualnego
 python3 -m venv venv
 

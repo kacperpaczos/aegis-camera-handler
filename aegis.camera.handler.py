@@ -201,10 +201,24 @@ class CameraServer:
         if self.debug:
             logger.debug(f"Recording result: {result}")
         
-        return web.Response(text=json.dumps({
-            **result,
-            "message": "Send new request to try again" if result["status"] == "retry" else None
-        }), content_type='application/json')
+        response = {
+            "status": result["status"],
+            "frames_processed": result.get("frames_processed", 0),
+            "face_detected": result.get("face_detected", False),
+            "match_found": result.get("match_found", False)
+        }
+
+        if result.get("message"):
+            response["message"] = result["message"]
+        elif result["status"] == "retry":
+            response["message"] = "Face detected but not matched, try again"
+        elif result["status"] == "error":
+            response["message"] = "No face detected or error occurred"
+        
+        return web.Response(
+            text=json.dumps(response),
+            content_type='application/json'
+        )
 
     async def record_training_video(self, save_path, duration=5):
         if self.debug:

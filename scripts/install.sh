@@ -1,26 +1,34 @@
 #!/bin/bash
 
-echo "Sprawdzanie czy pip jest zainstalowany..."
+echo "Tworzenie środowiska wirtualnego..."
 
-# Sprawdzanie czy pip jest zainstalowany
-if ! command -v pip &> /dev/null; then
-    echo "Pip nie jest zainstalowany. Instalowanie pip..."
+# Sprawdzanie czy venv jest zainstalowany
+if ! command -v python3 -m venv &> /dev/null; then
+    echo "Python venv nie jest zainstalowany. Instalowanie..."
     
-    # Sprawdzanie rodzaju systemu i instalacja pip
     if command -v apt-get &> /dev/null; then
         sudo apt-get update
-        sudo apt-get install -y python3-pip
+        sudo apt-get install -y python3-venv
     elif command -v yum &> /dev/null; then
-        sudo yum install -y python3-pip
+        sudo yum install -y python3-venv
     elif command -v pacman &> /dev/null; then
-        sudo pacman -S python-pip
+        sudo pacman -S python-virtualenv
     else
-        echo "Nie można zainstalować pip automatycznie. Zainstaluj pip ręcznie."
+        echo "Nie można zainstalować venv automatycznie. Zainstaluj ręcznie."
         exit 1
     fi
 fi
 
+# Tworzenie środowiska wirtualnego
+python3 -m venv venv
+
+# Aktywacja środowiska
+source venv/bin/activate
+
 echo "Instalowanie wymaganych pakietów..."
+
+# Aktualizacja pip
+pip install --upgrade pip
 
 # Instalacja wymaganych pakietów
 pip install aiohttp

@@ -28,6 +28,7 @@ class CameraServer:
     def setup_routes(self):
         self.app.router.add_get('/health', self.health_check)
         self.app.router.add_post('/record', self.handle_record)
+        self.app.router.add_post('/train', self.handle_train)
         self.app.on_startup.append(self.check_facenet_availability)
 
     async def check_facenet_availability(self, app):
@@ -204,6 +205,100 @@ class CameraServer:
             **result,
             "message": "Send new request to try again" if result["status"] == "retry" else None
         }), content_type='application/json')
+
+    async def record_training_video(self, save_path, duration=5):
+        if self.debug:
+            logger.debug(f"=== Starting Training Recording to {save_path} ===")
+        
+        try:
+            if not await self.initialize_camera():
+                return False
+
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            
+            fps = 20
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(save_path, fourcc, fps, (640, 480))
+            
+            frames_to_capture = fps * duration
+            frame_count = 0
+            
+            while frame_count < frames_to_capture and self.is_recording:
+                ret, frame = self.camera.read()
+                if not ret:
+                    break
+                out.write(frame)
+                frame_count += 1
+                await asyncio.sleep(1/fps)
+            
+            out.release()
+            await self.release_camera()
+            self.is_recording = False
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during training recording: {e}")
+            return False
+
+    async def handle_train(self, request):
+        if self.is_recording:
+            return web.Response(
+                text=json.dumps({"status": "error", "message": "Recording already in progress"}),
+                content_type='application/json'
+            )
+
+        try:
+            data = await request.json()
+            save_path = data.get('video_path')
+            if not save_path:
+                return web.Response(
+                    text=json.dumps({"status": "error", "message": "video_path is required"}),
+                    content_type='application/json'
+                )
+
+            save_path = os.path.expanduser(save_path)
+            
+            # Najpierw nagrywamy wideo
+            self.is_recording = True
+            success = await self.record_training_video(save_path)
+            if not success:
+                return web.Response(
+                    text=json.dumps({"status": "error", "message": "Failed to record video"}),
+                    content_type='application/json'
+                )
+
+            # Sprawdzamy czy plik został utworzony
+            if not os.path.exists(save_path):
+                return web.Response(
+                    text=json.dumps({"status": "error", "message": "Video file was not created"}),
+                    content_type='application/json'
+                )
+
+            # Czekamy chwilę, aby upewnić się że plik został zapisany
+            await asyncio.sleep(1)
+
+            # Wysyłamy żądanie do facenet
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.facenet_url}/train",
+                    json={'video_path': save_path}
+                ) as response:
+                    facenet_response = await response.json()
+                    return web.Response(
+                        text=json.dumps({
+                            "status": "success",
+                            "message": "Video recorded and sent for training",
+                            "facenet_response": facenet_response
+                        }),
+                        content_type='application/json'
+                    )
+            
+        except Exception as e:
+            logger.error(f"Error in handle_train: {e}")
+            return web.Response(
+                text=json.dumps({"status": "error", "message": str(e)}),
+                content_type='application/json'
+            )
 
     def run(self):
         web.run_app(self.app, host=self.host, port=self.port)
